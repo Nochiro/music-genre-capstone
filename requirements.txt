@@ -1,0 +1,25 @@
+# Music Genre Classification — Capstone DL Project
+# Dependencies
+
+# --- Audio & Feature Extraction ---
+librosa==0.10.2
+soundfile==0.12.1
+
+# --- Core Scientific Stack ---
+numpy==1.26.4
+pandas==2.2.2
+matplotlib==3.9.2
+
+# --- Classical ML / Utilities ---
+scikit-learn==1.5.1
+
+# --- Deep Learning Framework ---
+torch==2.4.1
+torchvision==0.19.1
+torchaudio==2.4.1
+
+# --- Experiment Tracking ---
+mlflow==2.16.2
+
+# --- Progress Bars ---
+tqdm==4.66.5
