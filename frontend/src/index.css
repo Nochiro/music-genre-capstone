@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply transition-colors duration-200;
+}
+
+html {
+  @apply scroll-smooth;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Animated background gradient */
+@keyframes subtle-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animated-bg {
+  background: linear-gradient(-45deg, #0f172a, #1e293b, #0f172a, #1a1f35);
+  background-size: 400% 400%;
+  animation: subtle-shift 15s ease infinite;
+}
+
+/* Glass effect */
+.glass-panel {
+  @apply backdrop-blur-xl bg-white/5 border border-white/10;
+}
+
+/* Smooth fade-in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+/* Loading pulse */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Waveform animation */
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.6);
+  }
+}
+
+.wave-bar {
+  animation: wave 0.6s ease-in-out infinite;
+}
+
+/* Upload drag over */
+.upload-active {
+  @apply ring-2 ring-violet-400 bg-white/10;
+}
+
+/* Hover effects */
+.button-hover {
+  @apply hover:shadow-lg hover:shadow-violet-500/20 transition-all duration-300;
+}
+
+.card-hover {
+  @apply hover:shadow-lg hover:shadow-slate-900/50 transition-all duration-300;
+}
+
+/* Text gradients */
+.gradient-text {
+  @apply bg-gradient-to-r from-violet-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  @apply w-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full hover:bg-slate-600;
+}
