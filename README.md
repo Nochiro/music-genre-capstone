@@ -131,6 +131,20 @@ music-genre-capstone/
    pip install -r requirements.txt
    ```
 
+### Music Playback
+
+The application streams stored library audio through:
+
+```text
+GET /library/{song_id}/audio
+```
+
+The endpoint supports HTTP byte ranges for browser seeking and returns the original uploaded
+format without re-encoding. GenreLab provides one shared native HTML5 player for library and
+playlist playback, including play/pause, previous/next, seek, volume, mute, automatic queue
+advance, and playlist-order playback. Browser autoplay policies may require the user to press
+Play after a page load.
+
 ## Notes
 
 - **Feature extraction is slow** — run it once via `01_data_pipeline.ipynb`, cache results to

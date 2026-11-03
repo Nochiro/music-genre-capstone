@@ -1,25 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import AudioUploader from './components/AudioUploader';
-import AudioPlayer from './components/AudioPlayer';
 import ModelSelector from './components/ModelSelector';
 import AnalysisButton from './components/AnalysisButton';
 import PredictionResult from './components/PredictionResult';
 import ModelComparison from './components/ModelComparison';
 import ModelInfo from './components/ModelInfo';
 import TechnicalDetails from './components/TechnicalDetails';
+import LibraryPanel from './components/LibraryPanel';
+import PlaylistPanel from './components/PlaylistPanel';
+import MusicPlayer from './components/MusicPlayer';
 import { apiClient } from './services/api';
-import { PredictionResponse, ComparisonResponse } from './types/api';
+import { LibraryUploadResult, PredictionResponse, ComparisonResponse } from './types/api';
 import './index.css';
 
 function App() {
   const [apiStatus, setApiStatus] = useState(false);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
   const [selectedModel, setSelectedModel] = useState('resnet');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryResults, setLibraryResults] = useState<LibraryUploadResult[]>([]);
+  const [libraryRefreshToken, setLibraryRefreshToken] = useState(0);
+  const [playlistRefreshToken, setPlaylistRefreshToken] = useState(0);
+
+  const audioFile = audioFiles[0] || null;
 
   // Check API health on mount
   useEffect(() => {
@@ -37,14 +45,18 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleFileSelect = (file: File) => {
-    setAudioFile(file);
+  const handleFileSelect = (files: File[]) => {
+    setAudioFiles(files);
     setPrediction(null);
     setComparison(null);
     setError(null);
   };
 
   const handleAnalyze = async () => {
+    if (audioFiles.length !== 1) {
+      setError('Select exactly one file for model analysis, or save the selection to your library.');
+      return;
+    }
     if (!audioFile) return;
 
     setLoading(true);
@@ -67,13 +79,34 @@ function App() {
     }
   };
 
+  const handleLibraryUpload = async () => {
+    if (audioFiles.length === 0) return;
+
+    setLibraryLoading(true);
+    setLibraryResults(audioFiles.map((file) => ({
+      success: false,
+      filename: file.name,
+      error: 'Processing...',
+    })));
+    try {
+      const result = await apiClient.uploadToLibrary(audioFiles);
+      setLibraryResults(result.results);
+      setLibraryRefreshToken((value) => value + 1);
+      setPlaylistRefreshToken((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Library upload failed');
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
   const showResults = !loading && (prediction || comparison);
 
   return (
     <div className="animated-bg min-h-screen">
       <Header apiStatus={apiStatus} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 pb-40">
         {/* Hero Section */}
         <section className="mb-16 text-center fade-in">
           <h2 className="text-5xl md:text-6xl font-bold mb-4 text-slate-100">
@@ -81,8 +114,8 @@ function App() {
             <span className="gradient-text"> music sound like?</span>
           </h2>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Upload a 30-second audio segment and let our deep learning models analyze the acoustic
-            patterns to predict the genre. Three architectures work together to classify your track.
+            Upload a track for full-song analysis or save multiple tracks to your persistent library.
+            Three architectures work together to classify your music.
           </p>
         </section>
 
@@ -93,14 +126,8 @@ function App() {
             <AudioUploader
               onFileSelect={handleFileSelect}
               disabled={loading}
-              fileName={audioFile?.name}
+              fileName={audioFiles.map((file) => file.name).join(', ')}
             />
-
-            {audioFile && (
-              <div className="fade-in">
-                <AudioPlayer file={audioFile} />
-              </div>
-            )}
 
             <ModelSelector
               selectedModel={selectedModel}
@@ -111,8 +138,26 @@ function App() {
             <AnalysisButton
               onClick={handleAnalyze}
               loading={loading}
-              disabled={!audioFile || !apiStatus}
+              disabled={audioFiles.length !== 1 || !apiStatus}
             />
+
+            <button
+              onClick={handleLibraryUpload}
+              disabled={audioFiles.length === 0 || libraryLoading || !apiStatus}
+              className="w-full py-3 px-6 rounded-lg font-semibold border border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {libraryLoading ? 'Saving to library...' : `Save ${audioFiles.length || ''} file${audioFiles.length === 1 ? '' : 's'} to library`}
+            </button>
+
+            {libraryResults.length > 0 && (
+              <div className="space-y-2 text-sm">
+                {libraryResults.map((result) => (
+                  <div key={result.filename} className={result.success ? 'text-emerald-300' : 'text-orange-300'}>
+                    {result.filename}: {result.success ? `${result.genre} saved` : result.error}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {!apiStatus && (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -166,12 +211,17 @@ function App() {
         {/* Technical Details */}
         <TechnicalDetails />
 
+        <LibraryPanel refreshToken={libraryRefreshToken} onPlaylistChange={() => setPlaylistRefreshToken((value) => value + 1)} />
+
+        <PlaylistPanel refreshToken={playlistRefreshToken} />
+
         {/* Footer */}
         <footer className="mt-20 pt-12 border-t border-slate-800 text-center text-slate-500 text-sm">
           <p>GenreLab © 2024 • Music Genre Classification Capstone</p>
           <p className="mt-2">CNN • LSTM • ResNet18</p>
         </footer>
       </main>
+      <MusicPlayer />
     </div>
   );
 }

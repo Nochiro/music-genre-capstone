@@ -34,6 +34,8 @@ frontend/dist/
 # Large datasets
 data/raw/
 data/fma/
+data/*.db
+data/audio/
 *.zip
 
 # Local model artifacts

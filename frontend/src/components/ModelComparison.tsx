@@ -1,4 +1,3 @@
-import React from 'react';
 import { ComparisonResponse } from '../types/api';
 import { CheckCircle } from 'lucide-react';
 

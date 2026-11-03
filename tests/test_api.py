@@ -26,3 +26,14 @@ def test_predict_requires_audio():
     )
 
     assert response.status_code == 422
+
+
+def test_predict_rejects_invalid_audio():
+    response = client.post(
+        "/predict",
+        files={"audio": ("invalid.mp3", b"not audio", "audio/mpeg")},
+        data={"model": "resnet"},
+    )
+
+    assert response.status_code == 500
+    assert "Prediction failed" in response.json()["detail"]

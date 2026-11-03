@@ -24,3 +24,21 @@ class HealthResponse(BaseModel):
     """Health check response."""
     status: str = Field(..., description="API status")
     models_loaded: Dict[str, bool] = Field(..., description="Model loading status")
+
+
+class PlaylistCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=1000)
+
+
+class PlaylistUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=1000)
+
+
+class PlaylistSongsRequest(BaseModel):
+    song_ids: List[str] = Field(..., min_length=1, max_length=1000)
+
+
+class PlaylistReorderRequest(BaseModel):
+    song_ids: List[str] = Field(..., max_length=1000)

@@ -4,6 +4,8 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV MUSIQ_DATABASE_PATH=/data/music_library.db
+ENV MUSIQ_AUDIO_DIRECTORY=/data/audio
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -29,6 +31,10 @@ RUN pip install --no-cache-dir \
 
 COPY backend /app/backend
 COPY model_artifacts /app/model_artifacts
+
+RUN mkdir -p /data/audio
+
+VOLUME ["/data"]
 
 EXPOSE 8000
 

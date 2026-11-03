@@ -13,22 +13,37 @@ pip install -r requirements.txt
 
 ### 2. Verify Models
 
-Ensure trained model checkpoints exist at:
-- `music_genre_models/cnn/best_cnn_model.pth`
-- `music_genre_models/lstm/best_lstm_model.pth`
-- `music_genre_models/transfer_learning/best_resnet18_finetuned_extended.pth`
+Ensure the serving checkpoints exist at:
+- `model_artifacts/cnn/best_cnn_model.pth`
+- `model_artifacts/lstm/best_lstm_model.pth`
+- `model_artifacts/resnet/resnet18_fp32.pth`
 
 ### 3. Start the API
 
 ```bash
-# From the backend directory
-python main.py
-
-# Or use uvicorn directly
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# From the repository root
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The API will start on `http://localhost:8000`
+
+### Persistent Music Library
+
+The library uses SQLite and stores audio files separately from the database. Configure the
+locations with:
+
+```bash
+MUSIQ_DATABASE_PATH=./data/music_library.db
+MUSIQ_AUDIO_DIRECTORY=./data/audio
+MUSIQ_MAX_UPLOAD_BYTES=104857600
+```
+
+The upload limit defaults to 100 MiB. In Docker, the image defaults to `/data/music_library.db`
+and `/data/audio`; mount one persistent volume at `/data` so records and audio survive restarts:
+
+```bash
+docker run -p 8000:8000 -v musiciq-data:/data musiq-backend
+```
 
 ## API Endpoints
 
@@ -112,6 +127,89 @@ Classify audio using all three models and compare predictions.
   "consensus_genre": "Rock"
 }
 ```
+
+### Persistent Library
+
+```
+POST /library/upload
+GET /library?search=track&genre=Rock&limit=50&offset=0
+GET /library/{song_id}
+DELETE /library/{song_id}
+```
+
+`POST /library/upload` accepts repeated `files` fields, analyzes each file with the full-song
+overlapping-window pipeline, and returns an individual success or failure result for every file.
+
+Stored audio can be streamed without re-encoding:
+
+```text
+GET /library/{song_id}/audio
+```
+
+The endpoint supports browser HTTP byte ranges (`206 Partial Content` and `416 Range Not
+Satisfiable`), seeking, `Accept-Ranges: bytes`, and the original file MIME type. Paths are
+resolved inside `MUSIQ_AUDIO_DIRECTORY`; client requests never provide filesystem paths.
+
+### Playlists
+
+Playlists persist ordered references to library songs. Deleting a playlist never deletes songs;
+deleting a library song removes its playlist membership through the foreign-key cascade.
+
+```text
+POST /playlists
+GET /playlists
+GET /playlists/{playlist_id}
+PATCH /playlists/{playlist_id}
+DELETE /playlists/{playlist_id}
+POST /playlists/{playlist_id}/songs
+DELETE /playlists/{playlist_id}/songs/{song_id}
+PATCH /playlists/{playlist_id}/songs/reorder
+POST /playlists/{playlist_id}/recommendations
+```
+
+Create a playlist:
+
+```json
+{
+  "name": "Road songs",
+  "description": "Tracks for the drive"
+}
+```
+
+Add songs or selected recommendation results:
+
+```json
+{
+  "song_ids": ["song-id-1", "song-id-2"]
+}
+```
+
+Names are required and limited to 120 characters; descriptions are optional and limited to
+1,000 characters. Song IDs must be known library songs. Duplicate additions are idempotent.
+Reorder requests must contain every current playlist song exactly once. Playlist tables are
+created with `CREATE TABLE IF NOT EXISTS`, and existing library rows are preserved during startup.
+
+### Recommendations
+
+Audio recommendations persist a full-song descriptor containing tempo, spectral centroid,
+spectral bandwidth, spectral rolloff, zero-crossing rate, and 13 MFCC means and standard
+deviations. Features are extracted over the existing overlapping windows, excluding zero
+padding from a final partial window.
+
+```text
+GET /recommendations/{song_id}?limit=10
+POST /library/rebuild-features
+```
+
+The ranking formula is:
+
+```text
+score = 0.7 * audio_similarity + 0.3 * genre_similarity
+```
+
+Audio similarity uses normalized Euclidean distance and genre similarity uses cosine similarity
+over the complete 16-class probability vector. Scores are bounded to `[0, 1]`. These weights are
+initial transparent defaults, not an evaluated claim of recommendation quality.
 
 ## Interactive Documentation
 

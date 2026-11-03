@@ -1,4 +1,3 @@
-import React from 'react';
 import { Music, Headphones, Radio, Zap } from 'lucide-react';
 
 export default function TechnicalDetails() {

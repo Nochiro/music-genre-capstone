@@ -1,4 +1,3 @@
-import React from 'react';
 import { Brain, Database, Zap } from 'lucide-react';
 
 export default function ModelInfo() {

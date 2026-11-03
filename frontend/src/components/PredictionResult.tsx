@@ -1,4 +1,3 @@
-import React from 'react';
 import { PredictionResponse } from '../types/api';
 
 interface PredictionResultProps {

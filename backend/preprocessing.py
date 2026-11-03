@@ -9,36 +9,156 @@ import torch
 from typing import Tuple
 
 
-def load_audio(audio_path: str, sr: int = 22050, duration: float = 30.0) -> np.ndarray:
+AUDIO_FEATURE_NAMES = (
+    "tempo",
+    "spectral_centroid_mean",
+    "spectral_bandwidth_mean",
+    "spectral_rolloff_mean",
+    "zero_crossing_rate_mean",
+    *[f"mfcc_{index}_mean" for index in range(1, 14)],
+    *[f"mfcc_{index}_std" for index in range(1, 14)],
+)
+
+
+def load_audio(audio_path: str, sr: int = 22050) -> np.ndarray:
     """
-    Load audio file and enforce 30-second duration.
+    Load the complete audio file as a mono waveform.
 
     Args:
         audio_path: Path to audio file
         sr: Sample rate (Hz)
-        duration: Target duration in seconds
-
     Returns:
-        Audio time series (mono), shape (num_samples,)
+        Complete audio time series (mono), shape (num_samples,)
 
     Raises:
         Exception: If audio cannot be loaded
     """
     try:
         # Load as mono
-        y, _ = librosa.load(audio_path, sr=sr, mono=True, duration=duration)
-
-        # Pad or truncate to exactly 30 seconds
-        target_samples = int(sr * duration)
-        if len(y) < target_samples:
-            y = np.pad(y, (0, target_samples - len(y)), mode='constant', constant_values=0)
-        elif len(y) > target_samples:
-            y = y[:target_samples]
-
+        y, _ = librosa.load(audio_path, sr=sr, mono=True)
         return y
 
     except Exception as e:
         raise Exception(f"Failed to load audio from {audio_path}: {str(e)}")
+
+
+def create_audio_windows(
+    audio: np.ndarray,
+    sr: int = 22050,
+    window_seconds: float = 30.0,
+    stride_seconds: float = 15.0,
+) -> list[tuple[float, float, np.ndarray]]:
+    """Split complete audio into overlapping, model-sized windows.
+
+    Windows use a 15-second stride by default, so adjacent full windows
+    overlap by 50%. A short song produces one padded window. For a longer
+    song, a final partial stride window is added when needed so no trailing
+    audio is discarded; only that final window may contain zero padding.
+
+    Returns tuples of ``(start_seconds, end_seconds, audio_window)``. The end
+    timestamp describes the original audio and therefore excludes any padding.
+    """
+    if audio.ndim != 1:
+        raise ValueError("Audio must be a one-dimensional mono waveform.")
+    if sr <= 0 or window_seconds <= 0 or stride_seconds <= 0:
+        raise ValueError("Sample rate, window size, and stride must be positive.")
+
+    window_samples = int(round(sr * window_seconds))
+    stride_samples = int(round(sr * stride_seconds))
+    audio_length = len(audio)
+
+    if audio_length <= window_samples:
+        starts = [0]
+    else:
+        starts = list(range(0, audio_length - window_samples + 1, stride_samples))
+        last_full_end = starts[-1] + window_samples
+        next_start = starts[-1] + stride_samples
+        if last_full_end < audio_length:
+            starts.append(next_start)
+
+    windows = []
+    for start_sample in starts:
+        end_sample = min(start_sample + window_samples, audio_length)
+        window = audio[start_sample:end_sample]
+        if len(window) < window_samples:
+            window = np.pad(
+                window,
+                (0, window_samples - len(window)),
+                mode="constant",
+                constant_values=0,
+            )
+
+        start_seconds = start_sample / sr
+        end_seconds = end_sample / sr
+        windows.append((start_seconds, end_seconds, window))
+
+    return windows
+
+
+def _finite_mean(values: np.ndarray) -> float:
+    finite_values = values[np.isfinite(values)]
+    if finite_values.size == 0:
+        return 0.0
+    return float(np.mean(finite_values))
+
+
+def extract_audio_features(
+    audio: np.ndarray,
+    sr: int = 22050,
+) -> dict[str, float]:
+    """Extract an aggregated full-song audio descriptor.
+
+    Each overlapping Phase 1 window is analyzed independently. The final
+    partial window is trimmed back to its original audio before feature
+    extraction, so zero padding cannot become a similarity signal. Features
+    are averaged across windows and are intended for relative retrieval, not
+    as ground-truth labels.
+    """
+    window_features = []
+    for start_seconds, end_seconds, audio_window in create_audio_windows(audio, sr=sr):
+        actual_samples = max(1, int(round((end_seconds - start_seconds) * sr)))
+        window_features.append(_extract_window_features(audio_window[:actual_samples], sr))
+
+    if not window_features:
+        raise ValueError("Audio did not produce any feature windows.")
+
+    return {
+        name: float(np.mean([features[name] for features in window_features]))
+        for name in AUDIO_FEATURE_NAMES
+    }
+
+
+def _extract_window_features(audio: np.ndarray, sr: int) -> dict[str, float]:
+    if audio.size == 0:
+        raise ValueError("Audio window is empty.")
+
+    try:
+        tempo = librosa.feature.tempo(y=audio, sr=sr)
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio, sr=sr)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=audio, sr=sr)
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sr)
+        zero_crossing_rate = librosa.feature.zero_crossing_rate(audio)
+        mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=13)
+    except Exception as error:
+        raise ValueError(f"Audio feature extraction failed: {error}") from error
+
+    values = {
+        "tempo": _finite_mean(np.asarray(tempo)),
+        "spectral_centroid_mean": _finite_mean(spectral_centroid),
+        "spectral_bandwidth_mean": _finite_mean(spectral_bandwidth),
+        "spectral_rolloff_mean": _finite_mean(spectral_rolloff),
+        "zero_crossing_rate_mean": _finite_mean(zero_crossing_rate),
+    }
+    values.update({
+        f"mfcc_{index}_mean": _finite_mean(mfcc[index - 1])
+        for index in range(1, 14)
+    })
+    values.update({
+        f"mfcc_{index}_std": float(np.std(mfcc[index - 1]))
+        if np.isfinite(mfcc[index - 1]).any() else 0.0
+        for index in range(1, 14)
+    })
+    return values
 
 
 def extract_mel_spectrogram(

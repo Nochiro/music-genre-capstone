@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { Upload, Music } from 'lucide-react';
 
 interface AudioUploaderProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (files: File[]) => void;
   disabled?: boolean;
   fileName?: string;
 }
@@ -16,25 +16,21 @@ export default function AudioUploader({ onFileSelect, disabled, fileName }: Audi
     setIsDragActive(e.type === 'dragenter' || e.type === 'dragover');
   };
 
-  const processFile = (file: File) => {
-    if (file.type.startsWith('audio/') || file.type === 'application/octet-stream') {
-      onFileSelect(file);
-    }
+  const processFiles = (files: FileList | File[]) => {
+    const validFiles = Array.from(files).filter(
+      (file) => file.type.startsWith('audio/') || file.type === 'application/octet-stream'
+    );
+    if (validFiles.length > 0) onFileSelect(validFiles);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragActive(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      processFile(files[0]);
-    }
+    processFiles(e.dataTransfer.files);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) {
-      processFile(e.target.files[0]);
-    }
+    if (e.target.files?.length) processFiles(e.target.files);
   };
 
   return (
@@ -43,6 +39,7 @@ export default function AudioUploader({ onFileSelect, disabled, fileName }: Audi
         ref={fileInputRef}
         type="file"
         accept="audio/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
         disabled={disabled}
@@ -84,7 +81,7 @@ export default function AudioUploader({ onFileSelect, disabled, fileName }: Audi
 
           <div className="text-center">
             <p className="text-lg font-semibold text-slate-100">
-              {fileName ? 'File selected' : 'Drop your audio here'}
+              {fileName ? 'Files selected' : 'Drop your audio here'}
             </p>
             <p className="text-sm text-slate-400 mt-1">
               {fileName ? fileName : 'or click to browse • MP3, WAV supported'}
